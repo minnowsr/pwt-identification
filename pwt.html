@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>PWT Identification</title>
+
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@200..800&family=Passero+One&family=Sankofa+Display&display=swap" rel="stylesheet">
+
+<style>
+* {
+	font-family: "Oxanium";
+}
+
+.male {
+	color: #00bdf7;
+}
+
+.female {
+	color: #ff3142;
+}
+
+.sturdy {
+	color: red;
+}
+
+.magnet-pull {
+	color: green;
+}
+
+</style>
+	</head>
+
+<body>
+	<h1> PWT Frame Identification </h1>
+	<h3> Does Colress' Magneton have Sturdy? </h3>
+
+	<h3 id="result"> </h3>
+
+	<div>
+		<label for="seed"> Seed </label>
+		<input type="text" maxlength="18" id="seed"> <br>
+
+		<label for="min-adv"> Min advances </label>
+		<input type="text" maxlength="8" size="6" id="min-adv" value="4000"> <br>
+
+		<label for="max-adv"> Max advances </label>
+		<input type="text" maxlength="8" size="6" id="max-adv" value="8000">
+	</div>
+
+	<br>
+	<div>
+		<span> Player text bubbles </span> <br>
+		<select id="you-1" class="cheer"></select>
+		<select id="you-2" class="cheer"></select> <br>
+
+		<span> Cheren text bubbles </span> <br>
+		<select id="cheren-1" class="cheer"></select>
+		<select id="cheren-2" class="cheer"></select>
+	</div>
+	<br>
+
+	<div>
+		<span> Stoutland's ability </span>  <br>
+		<input type="radio" id="stoutland-sand-rush" name="stoutland-ability" value="Sand Rush">
+		<label for="stoutland-sand-rush"> Sand Rush  </label>
+		<input type="radio" id="stoutland-intimidate" name="stoutland-ability" value="Intimidate">
+		<label for="stoutland-intimidate"> Intimidate </label>
+	</div>
+
+	<div>
+		<span> Stoutland's gender </span>  <br>
+		<input type="radio" id="stoutland-male" name="stoutland-gender" value="M">
+		<label for="stoutland-male" class="male"> ♂  </label>
+		<input type="radio" id="stoutland-female" name="stoutland-gender" value="F">
+		<label for="stoutland-female" class="female"> ♀ </label>
+	</div>
+
+	<div>
+		<span> Cinccino's gender </span>  <br>
+		<input type="radio" id="cinccino-male" name="cinccino-gender" value="M">
+		<label for="cinccino-male" class="male"> ♂  </label>
+		<input type="radio" id="cinccino-female" name="cinccino-gender" value="F">
+		<label for="cinccino-female" class="female"> ♀ </label>
+	</div>
+	<div>
+		<span> Watchog's gender </span>  <br>
+		<input type="radio" id="watchog-male" name="watchog-gender" value="M">
+		<label for="watchog-male" class="male"> ♂  </label>
+		<input type="radio" id="watchog-female" name="watchog-gender" value="F">
+		<label for="watchog-female" class="female"> ♀ </label>
+	</div>
+
+	<br> <button onclick="search()"> Search </button>
+
+<script>
+const PLAYER_CHEER_CHANCE = 39; 
+const OPPONENT_CHEER_CHANCE = 99;
+
+const ROUND2_CHEERS = ["Eeeeek!", "Do your best!", "<name>!", "Go!", "Roaar!", "Go!", "Here they are!",
+	"Knock them out!", "Win!", "Yay!"];
+
+const CHEREN_POKEMON = {
+	Stoutland: { abilities: ["Intimidate", "Sand Rush"], ratio: 127 },
+	Cinccino:  { abilities: ["Cute Charm", "Technician"], ratio: 191 },
+	Watchog:   { abilities: ["Illuminate", "Keen Eye"], ratio: 127 },
+};
+
+class PIDRNG {
+	constructor(state) {
+		this.state = state;
+	}
+
+	advance() {
+		this.state = (this.state * 0x5D588B656C078965n + 0x269EC3n) & ((1n << 64n) - 1n);
+		return this.state >> 32n;
+	}
+
+	next(max) {
+		const hi = this.advance();
+		return max === 0 ? Number(hi) : Number((hi * BigInt(max)) >> 32n);
+	}
+}
+
+function bracketLines(rng) {
+	const lines = new Set();
+	while (lines.size < 4) {
+		lines.add(rng.next(5));
+	}
+}
+
+function cheer(rng, chance) {
+	if (rng.next(100) > chance) return "-";
+	return ROUND2_CHEERS[rng.next(10)];
+}
+
+function skipCheers(rng, count, chance) {
+	for (let i = 0; i < count; i++) {
+		cheer(rng, chance);
+	}
+}
+
+function pickFile(rng) {
+	return Math.floor(rng.next(0xFFFFFFFF) / 0xFFFF) % 2;
+}
+
+function pokemon(name, pid) {
+	const info = CHEREN_POKEMON[name];
+	return {
+		name,
+		ability: info.abilities[pid & 1],
+		gender: (pid & 0xFF) < info.ratio ? "F" : "M",
+	};
+}
+
+function cherenParty(rng) {
+	// Order is random despite send-out order being static. Gender is an identifier, so this is still required for sims.
+	const party = [pokemon("Stoutland", rng.next(0))];
+	const first = pickFile(rng);
+	pickFile(rng);
+	const rest = first === 0 ? ["Cinccino", "Watchog"] : ["Watchog", "Cinccino"];
+	for (const name of rest) {
+		party.push(pokemon(name, rng.next(0)));
+	}
+
+	for (let i = 0; i < 3; i++) {
+		rng.next(0);   // TID
+		rng.next(25);  // nature
+	}
+	return party;
+}
+
+function matches(expected, actual) {
+	return expected === "?" || expected === actual;
+}
+
+function simulate(state, id) {
+	const rng = new PIDRNG(state);
+
+	bracketLines(rng);
+	const nextRng = rng.state;
+
+	for (const e of id.playerBubbles) {
+		if (!matches(e, cheer(rng, PLAYER_CHEER_CHANCE))) return null;
+	}
+	for (const e of id.cherenBubbles) {
+		if (!matches(e, cheer(rng, OPPONENT_CHEER_CHANCE))) return null;
+	}
+
+	const party = cherenParty(rng);
+	if (party[0].ability !== id.stoutlandAbility) return null;
+	for (const mon of party) {
+		if (mon.gender !== id.genders[mon.name]) return null;
+	}
+
+	bracketLines(rng);
+	skipCheers(rng, 6, PLAYER_CHEER_CHANCE);
+	skipCheers(rng, 6, OPPONENT_CHEER_CHANCE);
+
+	const magnetonPID = rng.next(0);
+	return { nextRng, sturdy: (magnetonPID & 1) === 1 };
+}
+
+function parseSeed(text) {
+	const hex = text.trim().replace(/^0x/i, "");
+	return /^[0-9a-f]{1,16}$/i.test(hex) ? BigInt("0x" + hex) : null;
+}
+
+function checkedValue(name) {
+	const input = document.querySelector(`input[name="${name}"]:checked`);
+	return input ? input.value : null;
+}
+
+function readIdentifiers() {
+	const value = id => document.getElementById(id).value;
+	const ids = {
+		playerBubbles: [value("you-1"), value("you-2")],
+		cherenBubbles: [value("cheren-1"), value("cheren-2")],
+		stoutlandAbility: checkedValue("stoutland-ability"),
+		genders: {
+			Stoutland: checkedValue("stoutland-gender"),
+			Cinccino: checkedValue("cinccino-gender"),
+			Watchog: checkedValue("watchog-gender"),
+		},
+	};
+	const res = ids.stoutlandAbility !== null && !Object.values(ids.genders).includes(null);
+	return res ? ids : null;
+}
+
+function search() {
+	const result = document.getElementById("result");
+	result.className = "";
+
+	const seed = parseSeed(document.getElementById("seed").value);
+	if (seed === null) {
+		result.textContent = "Invalid seed";
+		return;
+	}
+
+	let min = parseInt(document.getElementById("min-adv").value, 10);
+	let max = parseInt(document.getElementById("max-adv").value, 10);
+	if (isNaN(min) || isNaN(max)) {
+		result.textContent = "Invalid advances";
+		return;
+	}
+	if (min > max) [min, max] = [max, min];
+
+	const id = readIdentifiers();
+	if (id === null) {
+		result.textContent = "Select Stoutland's ability and gender of Pokemon";
+		return;
+	}
+
+	const outcomes = new Map();
+	const rng = new PIDRNG(seed);
+	for (let i = 0; i < min; i++) rng.advance();
+	for (let frame = min; frame <= max; frame++) {
+		const hit = simulate(rng.state, id);
+		if (hit !== null) {
+			const key = hit.nextRng.toString(16);
+			if (!outcomes.has(key)) outcomes.set(key, { frames: [], sturdy: hit.sturdy });
+			outcomes.get(key).frames.push(frame);
+		}
+		rng.advance();
+	}
+
+	const candidates = [...outcomes.values()];
+	if (candidates.length === 0) {
+		result.textContent = "Couldn't determine frame";
+		return;
+	}
+	if (candidates.some(c => c.sturdy) && candidates.some(c => !c.sturdy)) {
+		result.textContent = `Couldn't determine frame (${candidates.length} candidates)`;
+		return;
+	}
+
+	const frames = candidates.flatMap(c => c.frames).join(", ");
+	if (candidates[0].sturdy) {
+		result.textContent = `Yes :( [${frames}]`;
+		result.className = "sturdy";
+	} else {
+		result.textContent = `No :) [${frames}]`;
+		result.className = "magnet-pull";
+	}
+}
+
+function fillCheerChoices() {
+	const choices = [["?", "?"], ["-", "none"], ...[...new Set(ROUND2_CHEERS)].map(t => [t, t])];
+	for (const select of document.querySelectorAll("select.cheer")) {
+		for (const [value, label] of choices) {
+			select.add(new Option(label, value));
+		}
+	}
+}
+
+fillCheerChoices();
+</script>
+
+</body>
+
+</html>
